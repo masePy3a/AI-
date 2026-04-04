@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+
+<title>AI対戦オセロ</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  body { font-family: system-ui, Arial; display:flex; justify-content:center; align-items:center; min-height:100vh; background:#0f172a; color:#fff; }
+  .wrap { text-align:center; }
+  .title { margin-bottom: 10px; font-weight:700; font-size:20px; }
+  .board {
+    display:grid; grid-template-columns: repeat(8, 48px); grid-template-rows: repeat(8, 48px);
+    gap:2px; padding:6px; background:#083d1a; border-radius: 10px;
+    box-shadow:0 10px 30px rgba(0,0,0,.4);
+  }
+  .cell {
+    width:48px; height:48px; background:#157347; border-radius:6px;
+    position:relative; cursor:pointer;
+  }
+  .cell:hover { outline:2px solid rgba(255,255,255,.25); }
+  .disc {
+    position:absolute; inset:7px; border-radius:50%;
+    box-shadow: inset 0 8px 14px rgba(0,0,0,.35), 0 2px 6px rgba(0,0,0,.25);
+  }
+  .black { background:#111; }
+  .white { background:#eee; }
+  .status { margin: 10px 0; font-size: 14px; opacity:.9; }
+  .hint { font-size: 12px; opacity:.7; }
+  button { margin-top: 10px; padding:8px 12px; border:none; border-radius:8px;
+    background:#22c55e; color:#041; font-weight:700; cursor:pointer; }
+  button:active { transform: translateY(1px); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="title">AI対戦オセロ</div>
+  <div class="status">手番: <span id="turnLabel"></span></div>
+  <div class="status">スコア: <span id="scoreLabel"></span></div>
+  <div id="board" class="board" aria-label="Othello board"></div>
+  <div class="hint">クリックで石を置いてください。AIは白、あなたは黒です。</div>
+  <button id="resetBtn">初期配置に戻す</button>
+</div>
+
+<script>
+const SIZE = 8;
+const HUMAN = 'B';
+const AI = 'W';
+let grid = [];
+let turn = HUMAN;
+const boardEl = document.getElementById('board');
+const turnLabel = document.getElementById('turnLabel');
+const scoreLabel = document.getElementById('scoreLabel');
+const resetBtn = document.getElementById('resetBtn');
+
+function initGrid() {
+  grid = Array.from({ length: SIZE }, () => Array(SIZE).fill(''));
+  const mid = SIZE / 2;
+  grid[mid - 1][mid - 1] = 'W';
+  grid[mid - 1][mid] = 'B';
+  grid[mid][mid - 1] = 'B';
+  grid[mid][mid] = 'W';
+}
+
+function countPieces() {
+  const result = { B: 0, W: 0 };
+  for (let r = 0; r < SIZE; r++) {
+    for (let c = 0; c < SIZE; c++) {
+      if (grid[r][c] === 'B') result.B++;
+      if (grid[r][c] === 'W') result.W++;
+    }
+  }
+  return result;
+}
+
+function render() {
+  boardEl.innerHTML = '';
+  for (let r = 0; r < SIZE; r++) {
+    for (let c = 0; c < SIZE; c++) {
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+      cell.dataset.r = r;
+      cell.dataset.c = c;
+      if (grid[r][c]) {
+        const disc = document.createElement('div');
+        disc.className = 'disc ' + (grid[r][c] === 'B' ? 'black' : 'white');
+        cell.appendChild(disc);
+      }
+      if (turn === HUMAN) {
+        cell.addEventListener('click', onPlace);
+      }
+      boardEl.appendChild(cell);
+    }
+  }
+
+  const score = countPieces();
+  scoreLabel.textContent = `黒 ${score.B} - 白 ${score.W}`;
+  const statusText = getStatusText();
+  turnLabel.textContent = statusText;
+}
+
+function getStatusText() {
+  if (isGameOver()) {
+    const score = countPieces();
+    if (score.B > score.W) return 'ゲーム終了: あなたの勝ちです！';
+    if (score.B < score.W) return 'ゲーム終了: AIの勝ちです。';
+    return 'ゲーム終了: 引き分けです。';
+  }
+  const legal = getLegalMoves(turn);
+  if (legal.length === 0) {
+    return `${turn === HUMAN ? 'あなた' : 'AI'} はパスします。`;
+  }
+  return turn === HUMAN ? 'あなたの番 (黒)' : 'AIの番 (白)';
+}
+
+function onPlace(e) {
+  if (turn !== HUMAN) return;
+  const r = +e.currentTarget.dataset.r;
+  const c = +e.currentTarget.dataset.c;
+  if (grid[r][c]) return;
+  const flips = getFlips(r, c, HUMAN);
+  if (flips.length === 0) return;
+  placeMove(r, c, HUMAN, flips);
+  turn = AI;
+  render();
+  setTimeout(runAiTurn, 250);
+}
+
+function placeMove(r, c, color, flips) {
+  grid[r][c] = color;
+  flips.forEach(([fr, fc]) => grid[fr][fc] = color);
+}
+
+function getFlips(r, c, color) {
+  if (grid[r][c]) return [];
+  const dirs = [[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[-1,1],[1,-1],[1,1]];
+  let flips = [];
+  for (const [dr, dc] of dirs) {
+    let nr = r + dr;
+    let nc = c + dc;
+    const temp = [];
+    while (nr >= 0 && nr < SIZE && nc >= 0 && nc < SIZE && grid[nr][nc] && grid[nr][nc] !== color) {
+      temp.push([nr, nc]);
+      nr += dr;
+      nc += dc;
+    }
+    if (nr >= 0 && nr < SIZE && nc >= 0 && nc < SIZE && grid[nr][nc] === color && temp.length > 0) {
+      flips = flips.concat(temp);
+    }
+  }
+  return flips;
+}
+
+function getLegalMoves(color) {
+  const moves = [];
+  for (let r = 0; r < SIZE; r++) {
+    for (let c = 0; c < SIZE; c++) {
+      if (grid[r][c]) continue;
+      const flips = getFlips(r, c, color);
+      if (flips.length > 0) {
+        moves.push({ r, c, flips });
+      }
+    }
+  }
+  return moves;
+}
+
+function chooseBestMove(moves) {
+  const weights = {
+    corner: 100,
+    edge: 10,
+    inner: 1,
+  };
+  let best = null;
+  let bestScore = -Infinity;
+  for (const move of moves) {
+    const { r, c, flips } = move;
+    let score = flips.length;
+    if ((r === 0 && c === 0) || (r === 0 && c === SIZE - 1) || (r === SIZE - 1 && c === 0) || (r === SIZE - 1 && c === SIZE - 1)) {
+      score += weights.corner;
+    } else if (r === 0 || r === SIZE - 1 || c === 0 || c === SIZE - 1) {
+      score += weights.edge;
+    } else {
+      score += weights.inner;
+    }
+    if (score > bestScore) {
+      bestScore = score;
+      best = move;
+    }
+  }
+  return best;
+}
+
+function runAiTurn() {
+  if (turn !== AI) return;
+  const moves = getLegalMoves(AI);
+  if (moves.length === 0) {
+    turn = HUMAN;
+    render();
+    return;
+  }
+  const bestMove = chooseBestMove(moves);
+  placeMove(bestMove.r, bestMove.c, AI, bestMove.flips);
+  turn = HUMAN;
+  render();
+  if (turn === HUMAN && getLegalMoves(HUMAN).length === 0 && !isGameOver()) {
+    turn = AI;
+    setTimeout(runAiTurn, 250);
+  }
+}
+
+function isGameOver() {
+  return getLegalMoves('B').length === 0 && getLegalMoves('W').length === 0;
+}
+
+resetBtn.addEventListener('click', () => {
+  turn = HUMAN;
+  initGrid();
+  render();
+});
+
+initGrid();
+render();
+</script>
+</body>
+</html>
+
