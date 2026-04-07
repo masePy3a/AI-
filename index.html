@@ -266,8 +266,10 @@ function updateStatus() {
   if (isGameOver()) {
     const score = countPieces();
     let msg = '';
+    let imgSrc = '';
     if (score.B > score.W) {
       msg = '🎉 あなたの勝ちです！';
+      imgSrc = '1.png'; // 勝ちの画像
       stats.wins++;
     } else if (score.B < score.W) {
       msg = '😢 AIの勝ちです。';
@@ -278,6 +280,23 @@ function updateStatus() {
     }
     statusLabel.textContent = msg;
     hintLabel.textContent = 'ゲーム終了';
+    
+    // 勝ちの画像を表示
+    if (imgSrc) {
+      const img = document.createElement('img');
+      img.src = imgSrc;
+      img.style.maxWidth = '200px';
+      img.style.maxHeight = '200px';
+      img.style.marginTop = '10px';
+      img.style.borderRadius = '8px';
+      img.style.boxShadow = '0 4px 12px rgba(0,0,0,0.3)';
+      img.onerror = function() {
+        console.log('画像が見つかりません: ' + imgSrc);
+        this.style.display = 'none';
+      };
+      statusLabel.appendChild(img);
+    }
+    
     saveStats();
   } else {
     const legal = getLegalMoves(turn);
